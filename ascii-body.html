@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D ASCII Human Anatomy Generator</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #00ff41; /* Matrix Green */
+            --highlight-color: #fff;
+            --ui-bg: rgba(0, 40, 0, 0.95);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #ascii-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            white-space: pre;
+            overflow: hidden;
+            font-size: 10px; /* Base font size */
+            line-height: 10px;
+            pointer-events: none; /* Let clicks pass through to the overlay */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+        }
+
+        #interaction-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            cursor: grab;
+        }
+
+        #interaction-overlay:active {
+            cursor: grabbing;
+        }
+
+        /* UI Elements */
+        .ui-panel {
+            position: absolute;
+            z-index: 20;
+            background: var(--ui-bg);
+            border: 1px solid var(--text-color);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        #controls {
+            top: 20px;
+            left: 20px;
+            max-width: 300px;
+        }
+
+        /* Sidebar for Tree View */
+        #sidebar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 240px;
+            bottom: 70px;
+            overflow-y: auto;
+            display: none;
+            z-index: 25;
+            background: var(--ui-bg);
+            border: 1px solid var(--text-color);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        /* Tree View Styles */
+        .tree-root {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .tree-category {
+            margin-bottom: 5px;
+        }
+
+        .tree-toggle {
+            cursor: pointer;
+            font-weight: bold;
+            padding: 2px 0;
+            display: block;
+            border-bottom: 1px dashed rgba(0, 255, 65, 0.3);
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+        
+        .tree-toggle:hover {
+            color: var(--highlight-color);
+        }
+
+        .tree-toggle::before {
+            content: "[+] ";
+            font-family: monospace;
+        }
+
+        .tree-toggle.open::before {
+            content: "[-] ";
+        }
+
+        .tree-children {
+            display: none;
+            padding-left: 15px;
+            margin-top: 2px;
+            border-left: 1px solid rgba(0, 255, 65, 0.3);
+        }
+
+        .tree-children.open {
+            display: block;
+        }
+
+        .part-item {
+            padding: 3px 6px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            display: block;
+        }
+
+        .part-item:hover {
+            background: var(--text-color);
+            color: black;
+        }
+
+        /* Custom Scrollbar */
+        #sidebar::-webkit-scrollbar { width: 6px; }
+        #sidebar::-webkit-scrollbar-track { background: #001100; }
+        #sidebar::-webkit-scrollbar-thumb { background: var(--text-color); border-radius: 3px; }
+
+        /* Visual Tools Panel */
+        #visual-tools {
+            bottom: 20px;
+            left: 20px;
+            width: 160px;
+            text-align: center;
+        }
+
+        .tool-section {
+            margin-bottom: 8px;
+            border-bottom: 1px dashed rgba(0, 255, 65, 0.3);
+            padding-bottom: 8px;
+        }
+        .tool-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+
+        .tool-btn {
+            background: transparent;
+            border: 1px solid var(--text-color);
+            color: var(--text-color);
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            transition: all 0.1s;
+        }
+
+        .tool-btn.wide {
+            width: 64px;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .tool-btn:hover {
+            background: var(--text-color);
+            color: black;
+        }
+        
+        .tool-btn:active {
+            background: var(--highlight-color);
+            border-color: var(--highlight-color);
+        }
+
+        #details-panel {
+            position: absolute;
+            top: auto;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: auto;
+            min-width: 350px;
+            max-width: 600px;
+            display: none;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            background: black;
+            text-align: center;
+            z-index: 50;
+        }
+
+        #export-btn {
+            bottom: 20px;
+            right: 20px;
+            position: absolute;
+            z-index: 20;
+            background: var(--text-color);
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        #export-btn:hover {
+            background: var(--highlight-color);
+        }
+
+        button.toggle-btn {
+            background: transparent;
+            border: 1px solid var(--text-color);
+            color: var(--text-color);
+            padding: 5px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-right: 5px;
+        }
+
+        button.toggle-btn.active {
+            background: var(--text-color);
+            color: black;
+        }
+
+        h1, h2, h3 {
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            border-bottom: 1px dashed var(--text-color);
+            padding-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        h3 {
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        p {
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        /* Floating Labels */
+        .label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2px 6px;
+            border: 1px solid var(--text-color);
+            font-size: 12px;
+            pointer-events: auto;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.2s;
+            z-index: 15;
+        }
+
+        .label:hover {
+            background: var(--text-color);
+            color: black;
+            z-index: 16;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            background: black;
+            padding: 20px;
+            border: 2px solid var(--text-color);
+        }
+
+    </style>
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="loading" class="loading">INITIALIZING SYSTEM...</div>
+
+    <div id="ascii-container"></div>
+    
+    <!-- Captures Mouse Drag for Rotation -->
+    <div id="interaction-overlay"></div>
+
+    <!-- UI Controls -->
+    <div id="controls" class="ui-panel">
+        <h1>Anatomy Gen v1.4</h1>
+        <div style="margin-bottom: 10px;">
+            <button class="toggle-btn active" id="btn-male" onclick="switchGender('male')">MALE</button>
+            <button class="toggle-btn" id="btn-female" onclick="switchGender('female')">FEMALE</button>
+        </div>
+
+        <!-- Female Specific Controls -->
+        <div id="female-controls" style="display:none; margin-bottom: 10px; border-top: 1px dashed #00ff41; padding-top: 5px;">
+            <span style="font-size: 10px; margin-right: 5px;">BREAST SIZE:</span>
+            <button class="toggle-btn" onclick="adjustBreastSize(0.1)">+</button>
+            <button class="toggle-btn" onclick="adjustBreastSize(-0.1)">-</button>
+        </div>
+
+        <div style="margin-bottom: 10px; display: flex;">
+            <button class="toggle-btn active" id="btn-labels" onclick="toggleLabels()" style="flex:1;">LBL: ON</button>
+            <button class="toggle-btn" id="btn-sidebar" onclick="toggleSidebar()" style="flex:1;">TREE</button>
+        </div>
+        <p style="font-size: 0.8em; color: #888;">
+            [LMB] Rotate | [Scroll] Zoom<br>
+            Click Labels to inspect part.
+        </p>
+    </div>
+
+    <!-- Sidebar Tree View -->
+    <div id="sidebar">
+        <h3>Anatomy Index</h3>
+        <ul id="tree-root" class="tree-root"></ul>
+    </div>
+
+    <!-- Visual Camera Tools -->
+    <div id="visual-tools" class="ui-panel">
+        <h3>Cam Controls</h3>
+        
+        <!-- Pan -->
+        <div class="tool-section">
+            <div class="control-row">
+                <button class="tool-btn" onclick="panCamera(0, 1)" title="Pan Up">↑</button>
+            </div>
+            <div class="control-row">
+                <button class="tool-btn" onclick="panCamera(-1, 0)" title="Pan Left">←</button>
+                <button class="tool-btn" onclick="resetCamera()" title="Reset View" style="font-size: 10px;">RST</button>
+                <button class="tool-btn" onclick="panCamera(1, 0)" title="Pan Right">→</button>
+            </div>
+            <div class="control-row">
+                <button class="tool-btn" onclick="panCamera(0, -1)" title="Pan Down">↓</button>
+            </div>
+        </div>
+
+        <!-- Rotate -->
+        <div class="tool-section">
+            <div class="control-row">
+                <button class="tool-btn" onclick="rotateCamera(0, -0.1)" title="Rotate Up">▲</button>
+            </div>
+            <div class="control-row">
+                <button class="tool-btn" onclick="rotateCamera(0.1, 0)" title="Rotate Left">↺</button>
+                <button class="tool-btn" onclick="rotateCamera(-0.1, 0)" title="Rotate Right">↻</button>
+            </div>
+            <div class="control-row">
+                <button class="tool-btn" onclick="rotateCamera(0, 0.1)" title="Rotate Down">▼</button>
+            </div>
+        </div>
+
+        <!-- Zoom -->
+        <div class="tool-section">
+            <div class="control-row">
+                <button class="tool-btn wide" onclick="zoomCamera(-5)">Zoom +</button>
+                <button class="tool-btn wide" onclick="zoomCamera(5)">Zoom -</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Panel -->
+    <div id="details-panel" class="ui-panel">
+        <h2 id="detail-title">PART NAME</h2>
+        <h3 id="detail-cat" style="color:#888; border:none; margin-bottom:10px;">CATEGORY</h3>
+        <p id="detail-desc">Description goes here.</p>
+        <button class="toggle-btn" onclick="closeDetails()">CLOSE VIEW</button>
+    </div>
+
+    <!-- Export -->
+    <button id="export-btn" onclick="exportToTxt()">Export .TXT</button>
+
+    <!-- Label Container -->
+    <div id="labels-container"></div>
+
+<script>
+/**
+ * 3D ASCII ANATOMY GENERATOR v1.3
+ * Updates: Detailed Abdominal Organs, Tree View Sidebar
+ */
+
+// --- CONFIGURATION ---
+const CHAR_SET = " .:-=+*#%@"; // Dark to Light
+let currentGender = 'male';
+let showLabels = true; 
+let breastScale = 1.0; // State for breast size
+
+// --- THREE.JS SETUP ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: false }); 
+renderer.setSize(100, 100); 
+
+// --- STATE ---
+let bodyGroup;
+let parts = []; // Stores references to meshes and their metadata
+let labels = []; // DOM elements
+let isZoomed = false;
+
+// Camera System
+let currentLookAt = new THREE.Vector3(0, 0, 0); 
+let targetLookAt = new THREE.Vector3(0, 0, 0);  
+let targetCamPos = new THREE.Vector3();         
+
+let camRadius = 25;
+let camTheta = 0;
+let camPhi = Math.PI / 2;
+
+let mouseX = 0, mouseY = 0;
+let isDragging = false;
+
+// --- INITIALIZATION ---
+function init() {
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x444444);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(10, 10, 10);
+    scene.add(dirLight);
+    const backLight = new THREE.DirectionalLight(0x888888, 0.5);
+    backLight.position.set(-10, 5, -10);
+    scene.add(backLight);
+
+    updateCameraPosition();
+    
+    // Create Body
+    createHumanModel('male');
+
+    // Input Listeners
+    const overlay = document.getElementById('interaction-overlay');
+    overlay.addEventListener('mousedown', onMouseDown);
+    overlay.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    overlay.addEventListener('wheel', onWheel);
+    window.addEventListener('resize', onResize);
+
+    document.getElementById('loading').style.display = 'none';
+
+    // Start Loop
+    animate();
+}
+
+// --- ANATOMY GENERATION ---
+function createHumanModel(gender) {
+    if (bodyGroup) scene.remove(bodyGroup);
+    
+    const labelCont = document.getElementById('labels-container');
+    labelCont.innerHTML = '';
+    parts = [];
+
+    bodyGroup = new THREE.Group();
+    
+    const mat = new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true });
+    
+    // Helper to add part
+    function addPart(geom, x, y, z, name, desc, category) {
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(x, y, z);
+        mesh.name = name;
+        mesh.userData = { description: desc, category: category };
+        bodyGroup.add(mesh);
+        parts.push(mesh);
+        createLabel(mesh);
+        return mesh;
+    }
+
+    // DIMENSIONS
+    const hipWidth = gender === 'male' ? 1.4 : 1.8;
+    const shoulderWidth = gender === 'male' ? 2.4 : 1.8;
+    
+    // 1. HEAD & NECK
+    addPart(new THREE.SphereGeometry(0.9, 8, 8), 0, 7.5, 0, "Cranium", "The skull. Protects the brain.", "Head & Neck");
+    addPart(new THREE.SphereGeometry(0.12, 4, 4), -0.35, 7.6, 0.75, "Right Eye", "Organ of vision.", "Head & Neck").material.color = new THREE.Color(0xaa0000);
+    addPart(new THREE.SphereGeometry(0.12, 4, 4), 0.35, 7.6, 0.75, "Left Eye", "Organ of vision.", "Head & Neck");
+    addPart(new THREE.CylinderGeometry(0.4, 0.4, 1.5, 6), 0, 6.2, 0, "Cervical Spine", "The neck vertebrae.", "Head & Neck");
+
+    // 2. TORSO
+    const clavicle = addPart(new THREE.CylinderGeometry(0.15, 0.15, shoulderWidth * 1.3, 6), 0, 5.8, 0.3, "Clavicles", "The collarbones.", "Torso");
+    clavicle.rotation.z = Math.PI / 2;
+
+    addPart(new THREE.BoxGeometry(shoulderWidth * 1.5, 2.5, 1.5), 0, 4.5, 0, "Thorax", "Chest region containing heart and lungs.", "Torso");
+    
+    // Breasts (Female Only)
+    if (gender === 'female') {
+        const bSize = 0.5 * breastScale;
+        const zPos = 0.75 + (bSize * 0.5); // Push out slightly as they grow
+        addPart(new THREE.SphereGeometry(bSize, 8, 8), 0.5, 4.4, zPos, "Left Breast", "Mammary gland tissue.", "Torso");
+        addPart(new THREE.SphereGeometry(bSize, 8, 8), -0.5, 4.4, zPos, "Right Breast", "Mammary gland tissue.", "Torso");
+    }
+
+    // --- DETAILED ABDOMEN ---
+    // Stomach (Left Upper)
+    addPart(new THREE.SphereGeometry(0.7, 6, 6), -0.6, 2.8, 0.3, "Stomach", "Digestive organ that breaks down food.", "Abdomen");
+    
+    // Liver (Right Upper) - Large mass
+    addPart(new THREE.BoxGeometry(1.2, 1.0, 0.8), 0.6, 2.9, 0.3, "Liver", "Processes nutrients and detoxifies chemicals.", "Abdomen");
+    
+    // Small Intestine (Center Mass)
+    addPart(new THREE.SphereGeometry(0.9, 7, 7), 0, 1.8, 0.4, "Small Intestine", "Absorbs nutrients from food.", "Abdomen");
+    
+    // Large Intestine
+    addPart(new THREE.BoxGeometry(2.0, 0.4, 0.5), 0, 2.5, 0.4, "Transverse Colon", "Part of large intestine.", "Abdomen");
+    addPart(new THREE.BoxGeometry(0.4, 1.5, 0.5), 1.0, 1.5, 0.4, "Ascending Colon", "Part of large intestine.", "Abdomen");
+    addPart(new THREE.BoxGeometry(0.4, 1.5, 0.5), -1.0, 1.5, 0.4, "Descending Colon", "Part of large intestine.", "Abdomen");
+
+    // Kidneys (Back)
+    addPart(new THREE.SphereGeometry(0.4, 5, 5), 0.6, 2.5, -0.6, "Right Kidney", "Filters blood to produce urine.", "Abdomen");
+    addPart(new THREE.SphereGeometry(0.4, 5, 5), -0.6, 2.5, -0.6, "Left Kidney", "Filters blood to produce urine.", "Abdomen");
+    
+    // Pelvis
+    addPart(new THREE.BoxGeometry(hipWidth * 1.4, 1.5, 1.2), 0, 0, 0, "Pelvis", "Connects trunk and legs.", "Torso");
+
+    // 3. ARMS
+    [1, -1].forEach(s => {
+        const sideName = s === 1 ? "Right" : "Left";
+        const cat = s === 1 ? "Right Arm" : "Left Arm";
+        
+        addPart(new THREE.SphereGeometry(0.7, 6, 6), s * (shoulderWidth * 0.8), 5, 0, `${sideName} Shoulder`, "Ball-and-socket joint.", cat);
+        addPart(new THREE.CylinderGeometry(0.35, 0.3, 3, 6), s * (shoulderWidth * 0.9), 3, 0, `${sideName} Humerus`, "Upper arm bone.", cat);
+        addPart(new THREE.SphereGeometry(0.4, 5, 5), s * (shoulderWidth * 1.0), 1.5, 0.1, `${sideName} Elbow`, "Hinge joint.", cat);
+        addPart(new THREE.CylinderGeometry(0.3, 0.25, 2.8, 6), s * (shoulderWidth * 1.1), -0.1, 0.3, `${sideName} Forearm`, "Radius and Ulna.", cat);
+        addPart(new THREE.SphereGeometry(0.35, 4, 4), s * (shoulderWidth * 1.15), -1.6, 0.5, `${sideName} Wrist`, "Carpal bones.", cat);
+        addPart(new THREE.BoxGeometry(0.5, 0.8, 0.2), s * (shoulderWidth * 1.15), -2.2, 0.6, `${sideName} Hand`, "Terminal part of arm.", cat);
+    });
+
+    // 4. LEGS
+    [1, -1].forEach(s => {
+        const sideName = s === 1 ? "Right" : "Left";
+        const legX = s * (hipWidth * 0.4);
+        const cat = s === 1 ? "Right Leg" : "Left Leg";
+        
+        addPart(new THREE.CylinderGeometry(0.5, 0.4, 4, 6), legX, -2.5, 0, `${sideName} Femur`, "Thigh bone.", cat);
+        addPart(new THREE.SphereGeometry(0.5, 5, 5), legX, -4.8, 0, `${sideName} Knee`, "Hinge joint.", cat);
+        addPart(new THREE.CylinderGeometry(0.4, 0.3, 4, 6), legX, -7, 0, `${sideName} Tibia`, "Shin bone.", cat);
+        addPart(new THREE.SphereGeometry(0.45, 4, 4), legX, -9.1, 0.1, `${sideName} Ankle`, "Tarsal joint.", cat);
+        addPart(new THREE.BoxGeometry(0.6, 0.5, 1.8), legX, -9.6, 0.6, `${sideName} Foot`, "Weight-bearing structure.", cat);
+    });
+
+    scene.add(bodyGroup);
+    populateSidebar(); 
+}
+
+function createLabel(mesh) {
+    const div = document.createElement('div');
+    div.className = 'label';
+    div.innerText = mesh.name;
+    div.onclick = (e) => {
+        e.stopPropagation(); 
+        focusOnPart(mesh);
+    };
+    document.getElementById('labels-container').appendChild(div);
+    labels.push({ element: div, mesh: mesh });
+}
+
+// --- TREE VIEW LOGIC ---
+function populateSidebar() {
+    const root = document.getElementById('tree-root');
+    root.innerHTML = '';
+    
+    // Group parts by category
+    const categories = {};
+    
+    parts.forEach(part => {
+        const cat = part.userData.category || "Other";
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(part);
+    });
+
+    // Sort categories logic
+    const categoryOrder = ["Head & Neck", "Torso", "Abdomen", "Right Arm", "Left Arm", "Right Leg", "Left Leg"];
+    
+    categoryOrder.forEach(catName => {
+        if (categories[catName]) {
+            createTreeCategory(root, catName, categories[catName]);
+            delete categories[catName];
+        }
+    });
+    
+    // Add remaining
+    for (const catName in categories) {
+        createTreeCategory(root, catName, categories[catName]);
+    }
+}
+
+function createTreeCategory(root, name, items) {
+    const li = document.createElement('li');
+    li.className = 'tree-category';
+    
+    const toggle = document.createElement('span');
+    toggle.className = 'tree-toggle';
+    toggle.innerText = name;
+    toggle.onclick = function() {
+        this.classList.toggle('open');
+        this.nextElementSibling.classList.toggle('open');
+    };
+    
+    const childList = document.createElement('div');
+    childList.className = 'tree-children';
+    
+    items.forEach(mesh => {
+        const item = document.createElement('a');
+        item.className = 'part-item';
+        item.innerText = mesh.name;
+        item.onclick = () => focusOnPart(mesh);
+        childList.appendChild(item);
+    });
+
+    li.appendChild(toggle);
+    li.appendChild(childList);
+    root.appendChild(li);
+}
+
+
+function toggleLabels() {
+    showLabels = !showLabels;
+    const btn = document.getElementById('btn-labels');
+    if (showLabels) {
+        btn.innerText = "LBL: ON";
+        btn.classList.add('active');
+        document.getElementById('labels-container').style.display = 'block';
+    } else {
+        btn.innerText = "LBL: OFF";
+        btn.classList.remove('active');
+        document.getElementById('labels-container').style.display = 'none';
+    }
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('btn-sidebar');
+    if (sidebar.style.display === 'block') {
+        sidebar.style.display = 'none';
+        btn.classList.remove('active');
+    } else {
+        sidebar.style.display = 'block';
+        btn.classList.add('active');
+    }
+}
+
+// --- RENDERER ---
+function renderASCII() {
+    const container = document.getElementById('ascii-container');
+    const width = Math.floor(window.innerWidth / 8); 
+    const height = Math.floor(window.innerHeight / 12); 
+    
+    if (renderer.domElement.width !== width || renderer.domElement.height !== height) {
+        renderer.setSize(width, height);
+    }
+    renderer.render(scene, camera);
+
+    const pixels = new Uint8Array(width * height * 4);
+    const gl = renderer.getContext();
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    let asciiStr = "";
+    for (let y = height - 1; y >= 0; y--) {
+        for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const a = pixels[i+3];
+            if (a === 0) {
+                asciiStr += " ";
+                continue;
+            }
+            const brightness = (pixels[i] * 0.299 + pixels[i+1] * 0.587 + pixels[i+2] * 0.114) / 255;
+            asciiStr += CHAR_SET[Math.floor(brightness * (CHAR_SET.length - 1))];
+        }
+        asciiStr += "\n";
+    }
+    container.innerText = asciiStr;
+}
+
+function updateLabels() {
+    if (!showLabels) return; 
+
+    labels.forEach(item => {
+        const mesh = item.mesh;
+        const el = item.element;
+
+        if(isZoomed && mesh.name !== document.getElementById('detail-title').innerText) {
+             el.style.opacity = 0;
+             el.style.pointerEvents = 'none';
+             return;
+        }
+
+        const pos = mesh.position.clone();
+        pos.applyMatrix4(mesh.parent.matrixWorld); 
+        pos.project(camera);
+
+        if (pos.z > 1) {
+            el.style.display = 'none';
+        } else {
+            el.style.display = 'block';
+            el.style.left = `${(pos.x * .5 + .5) * window.innerWidth}px`;
+            el.style.top = `${(-(pos.y * .5) + .5) * window.innerHeight}px`;
+            el.style.opacity = 1;
+            el.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+// --- CONTROLS ---
+
+function panCamera(dx, dy) {
+    if(isZoomed) return;
+    
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+
+    const panSpeed = 2.0;
+    
+    currentLookAt.addScaledVector(right, dx * panSpeed);
+    currentLookAt.addScaledVector(up, dy * panSpeed);
+
+    updateCameraPosition();
+}
+
+function rotateCamera(dTheta, dPhi) {
+    if(isZoomed) return;
+    camTheta += dTheta;
+    camPhi += dPhi;
+    camPhi = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi));
+    updateCameraPosition();
+}
+
+function zoomCamera(delta) {
+    if(isZoomed) return;
+    camRadius += delta;
+    camRadius = Math.max(5, Math.min(60, camRadius));
+    updateCameraPosition();
+}
+
+function resetCamera() {
+    camRadius = 25;
+    camTheta = 0;
+    camPhi = Math.PI/2;
+    currentLookAt.set(0, 0, 0);
+    isZoomed = false;
+    updateCameraPosition();
+    
+    document.getElementById('details-panel').style.display = 'none';
+    document.getElementById('controls').style.display = 'block';
+    document.getElementById('visual-tools').style.display = 'block';
+}
+
+function updateCameraPosition() {
+    if(isZoomed) return;
+
+    const rx = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+    const ry = camRadius * Math.cos(camPhi);
+    const rz = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+
+    camera.position.set(
+        currentLookAt.x + rx,
+        currentLookAt.y + ry,
+        currentLookAt.z + rz
+    );
+    
+    camera.lookAt(currentLookAt);
+}
+
+function onMouseDown(e) {
+    isDragging = true;
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+}
+
+function onMouseMove(e) {
+    if (!isDragging || isZoomed) return;
+
+    const deltaX = e.clientX - mouseX;
+    const deltaY = e.clientY - mouseY;
+
+    camTheta -= deltaX * 0.01;
+    camPhi -= deltaY * 0.01;
+    camPhi = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi));
+
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    updateCameraPosition();
+}
+
+function onMouseUp() { isDragging = false; }
+
+function onWheel(e) {
+    if(isZoomed) return;
+    zoomCamera(e.deltaY * 0.05);
+}
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+}
+
+// Detail View
+function focusOnPart(mesh) {
+    isZoomed = true;
+    
+    const worldPos = new THREE.Vector3();
+    mesh.getWorldPosition(worldPos);
+    
+    targetLookAt.copy(worldPos);
+
+    const dir = new THREE.Vector3().subVectors(camera.position, currentLookAt).normalize();
+    targetCamPos.copy(worldPos).add(dir.multiplyScalar(6));
+
+    document.getElementById('details-panel').style.display = 'block';
+    document.getElementById('detail-title').innerText = mesh.name;
+    document.getElementById('detail-cat').innerText = mesh.userData.category;
+    document.getElementById('detail-desc').innerText = mesh.userData.description;
+    
+    document.getElementById('controls').style.display = 'block'; 
+}
+
+function closeDetails() {
+    isZoomed = false;
+    currentLookAt.copy(targetLookAt);
+    
+    const offset = new THREE.Vector3().subVectors(camera.position, currentLookAt);
+    camRadius = offset.length();
+    camRadius = 20; 
+    updateCameraPosition();
+
+    document.getElementById('details-panel').style.display = 'none';
+    document.getElementById('controls').style.display = 'block';
+    document.getElementById('visual-tools').style.display = 'block';
+}
+
+function switchGender(gender) {
+    if (gender === currentGender) return;
+    currentGender = gender;
+    
+    document.getElementById('btn-male').classList.toggle('active');
+    document.getElementById('btn-female').classList.toggle('active');
+    
+    // Toggle Female Controls
+    const fControls = document.getElementById('female-controls');
+    if (gender === 'female') {
+        fControls.style.display = 'block';
+    } else {
+        fControls.style.display = 'none';
+    }
+
+    createHumanModel(gender);
+}
+
+function adjustBreastSize(delta) {
+    breastScale += delta;
+    breastScale = Math.max(0.2, Math.min(3.0, breastScale)); // Clamping
+    createHumanModel(currentGender);
+}
+
+function exportToTxt() {
+    const content = document.getElementById('ascii-container').innerText;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `anatomy_scan_${new Date().getTime()}.txt`;
+    a.click();
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (isZoomed) {
+        camera.position.lerp(targetCamPos, 0.05);
+        const tempLook = new THREE.Vector3().copy(currentLookAt).lerp(targetLookAt, 0.05);
+        camera.lookAt(tempLook);
+    }
+
+    renderASCII();
+    updateLabels();
+}
+
+init();
+
+</script>
+</body>
+</html>
