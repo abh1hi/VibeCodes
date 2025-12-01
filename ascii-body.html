@@ -363,7 +363,7 @@
     <div id="header-controls">
         <div class="header-group">
             <div id="title-block" class="ui-panel">
-                <h1>ANATOMY GEN v2.0</h1>
+                <h1>ANATOMY GEN v2.3</h1>
             </div>
             <div class="btn-row">
                 <button class="toggle-btn active" id="btn-male" onclick="switchGender('male')">MALE</button>
@@ -448,7 +448,7 @@
 
 <script>
 /**
- * 3D ASCII ANATOMY GENERATOR v2.0 - MOBILE OPTIMIZED
+ * 3D ASCII ANATOMY GENERATOR v2.1 - REALISM UPDATE
  */
 
 // --- CONFIGURATION ---
@@ -518,7 +518,7 @@ function init() {
     animate();
 }
 
-// --- ANATOMY GENERATION (Same Logic) ---
+// --- ANATOMY GENERATION (REALISM UPDATE) ---
 function createHumanModel(gender) {
     if (bodyGroup) scene.remove(bodyGroup);
     
@@ -541,51 +541,325 @@ function createHumanModel(gender) {
         return mesh;
     }
 
-    // DIMENSIONS
-    const hipWidth = gender === 'male' ? 1.4 : 1.8;
-    const shoulderWidth = gender === 'male' ? 2.4 : 1.8;
+    const isMale = gender === 'male';
     
-    // PARTS (Simplified for brevity, includes all from previous version)
-    addPart(new THREE.SphereGeometry(0.9, 8, 8), 0, 7.5, 0, "Cranium", "The skull.", "Head & Neck");
-    addPart(new THREE.SphereGeometry(0.12), -0.35, 7.6, 0.75, "Right Eye", "Vision.", "Head & Neck");
-    addPart(new THREE.SphereGeometry(0.12), 0.35, 7.6, 0.75, "Left Eye", "Vision.", "Head & Neck");
-    addPart(new THREE.CylinderGeometry(0.4, 0.4, 1.5), 0, 6.2, 0, "Neck", "Cervical spine.", "Head & Neck");
+    // Proportions
+    // Male: Broader shoulders, V-taper. Female: Wider hips, Hourglass.
+    const shoulderWidth = isMale ? 2.6 : 2.0;
+    const hipWidth = isMale ? 1.6 : 2.3;
+    const waistWidth = isMale ? 1.5 : 1.3;
+    
+    // 1. HEAD & NECK
+    // Skull - elongated slightly
+    const skullGeo = new THREE.SphereGeometry(0.95, 10, 10);
+    skullGeo.scale(0.85, 1, 0.9);
+    addPart(skullGeo, 0, 7.8, 0, "Cranium", "Skull protecting the brain.", "Head & Neck");
+    
+    // Jaw (Mandible) - distinct shape
+    addPart(new THREE.BoxGeometry(1.0, 0.5, 0.8), 0, 7.2, 0.1, "Mandible", "Jaw bone.", "Head & Neck");
 
-    const clavicle = addPart(new THREE.CylinderGeometry(0.15, 0.15, shoulderWidth * 1.3), 0, 5.8, 0.3, "Clavicles", "Collarbones.", "Torso");
-    clavicle.rotation.z = Math.PI / 2;
+    // --- FACIAL FEATURES ---
+    
+    // Eyes
+    addPart(new THREE.SphereGeometry(0.12), -0.35, 7.9, 0.75, "Right Eye", "Vision.", "Head & Neck");
+    addPart(new THREE.SphereGeometry(0.12), 0.35, 7.9, 0.75, "Left Eye", "Vision.", "Head & Neck");
 
-    addPart(new THREE.BoxGeometry(shoulderWidth * 1.5, 2.5, 1.5), 0, 4.5, 0, "Thorax", "Chest.", "Torso");
+    // Eyebrows
+    const browGeo = new THREE.BoxGeometry(0.35, 0.05, 0.1);
+    const lBrow = addPart(browGeo, 0.35, 8.15, 0.85, "Left Eyebrow", "Facial hair.", "Head & Neck");
+    lBrow.rotation.z = 0.1;
+    const rBrow = addPart(browGeo, -0.35, 8.15, 0.85, "Right Eyebrow", "Facial hair.", "Head & Neck");
+    rBrow.rotation.z = -0.1;
 
-    if (gender === 'female') {
-        const bSize = 0.5 * breastScale;
-        const zPos = 0.75 + (bSize * 0.5); 
-        addPart(new THREE.SphereGeometry(bSize, 8, 8), 0.5, 4.4, zPos, "Left Breast", "Mammary gland.", "Torso");
-        addPart(new THREE.SphereGeometry(bSize, 8, 8), -0.5, 4.4, zPos, "Right Breast", "Mammary gland.", "Torso");
+    // Nose (Pyramid shape)
+    const noseGeo = new THREE.ConeGeometry(0.12, 0.4, 4);
+    // Rotate cone to point forward
+    const nose = addPart(noseGeo, 0, 7.75, 1.0, "Nose", "Olfactory organ.", "Head & Neck");
+    nose.rotation.x = -Math.PI / 2; // Point outward
+    nose.rotation.y = Math.PI / 4;  // Rotate so flat side isn't up
+
+    // Mouth / Lips
+    const mouthGeo = new THREE.BoxGeometry(0.4, 0.1, 0.1);
+    addPart(mouthGeo, 0, 7.45, 0.95, "Mouth", "Oral cavity opening.", "Head & Neck");
+
+    // Ears
+    const earGeo = new THREE.BoxGeometry(0.2, 0.5, 0.3);
+    addPart(earGeo, 0.95, 7.8, 0, "Left Ear", "Auditory organ.", "Head & Neck");
+    addPart(earGeo, -0.95, 7.8, 0, "Right Ear", "Auditory organ.", "Head & Neck");
+
+
+    // Neck
+    addPart(new THREE.CylinderGeometry(0.45, 0.5, 1.2, 8), 0, 6.4, -0.1, "Neck", "Cervical Spine.", "Head & Neck");
+
+    // HAIR
+    const hairMat = new THREE.MeshPhongMaterial({ color: 0x888888, flatShading: true });
+    
+    if (isMale) {
+        // Male Hair - Short, styled
+        const hairGeo = new THREE.SphereGeometry(1.0, 12, 12);
+        hairGeo.scale(0.9, 0.6, 0.95);
+        const hair = new THREE.Mesh(hairGeo, hairMat);
+        hair.position.set(0, 8.5, 0.05);
+        hair.name = "Hair";
+        hair.userData = { description: "Short, styled hair.", category: "Head & Neck" };
+        bodyGroup.add(hair);
+        parts.push(hair);
+        createLabel(hair);
+    } else {
+        // Female Hair - Longer with a bun
+        // Top part
+        const hairTopGeo = new THREE.SphereGeometry(1.0, 12, 12);
+        hairTopGeo.scale(0.95, 0.7, 1.0);
+        const hairTop = new THREE.Mesh(hairTopGeo, hairMat);
+        hairTop.position.set(0, 8.4, 0);
+        hairTop.name = "Hair (Top)";
+        hairTop.userData = { description: "Styled hair.", category: "Head & Neck" };
+        bodyGroup.add(hairTop);
+        parts.push(hairTop);
+        createLabel(hairTop);
+
+        // Bun at the back
+        const bunGeo = new THREE.SphereGeometry(0.6, 10, 10);
+        bunGeo.scale(1, 0.8, 1);
+        const bun = new THREE.Mesh(bunGeo, hairMat);
+        bun.position.set(0, 8.0, -0.9);
+        bun.name = "Hair (Bun)";
+        bun.userData = { description: "Hair bun.", category: "Head & Neck" };
+        bodyGroup.add(bun);
+        parts.push(bun);
+        createLabel(bun);
     }
 
-    // Abdominal Organs
-    addPart(new THREE.SphereGeometry(0.7), -0.6, 2.8, 0.3, "Stomach", "Digestion.", "Abdomen");
-    addPart(new THREE.BoxGeometry(1.2, 1.0, 0.8), 0.6, 2.9, 0.3, "Liver", "Detox.", "Abdomen");
-    addPart(new THREE.SphereGeometry(0.9), 0, 1.8, 0.4, "Small Intestine", "Absorption.", "Abdomen");
-    addPart(new THREE.BoxGeometry(2.0, 0.4, 0.5), 0, 2.5, 0.4, "Lg Intestine", "Colon.", "Abdomen");
-    
-    addPart(new THREE.BoxGeometry(hipWidth * 1.4, 1.5, 1.2), 0, 0, 0, "Pelvis", "Hips.", "Torso");
+    // 2. TORSO
+    // Clavicles
+    const clav = addPart(new THREE.CylinderGeometry(0.12, 0.12, shoulderWidth * 1.2, 6), 0, 6.0, 0.2, "Clavicles", "Collarbones.", "Torso");
+    clav.rotation.z = Math.PI / 2;
 
+    // Ribcage (Thorax) - Tapered cylinder instead of box
+    // Top width matches shoulders roughly, bottom matches waist
+    const chestTop = shoulderWidth * 0.45; 
+    const chestBot = waistWidth * 0.6; 
+    const chestGeo = new THREE.CylinderGeometry(chestTop, chestBot, 2.5, 10);
+    chestGeo.scale(1, 1, 0.7); // Flatten slightly front-to-back
+    addPart(chestGeo, 0, 4.8, 0, "Thorax", "Ribcage containing heart/lungs.", "Torso");
+
+    // --- ATHLETIC ABDOMEN GENERATION ---
+    
+    // 1. Core Volume (The visceral cavity behind the muscles)
+    const coreTop = chestBot * 0.85;
+    const coreBot = waistWidth * 0.7;
+    const absHeight = 2.0;
+    // Base cylinder slightly recessed
+    const coreGeo = new THREE.CylinderGeometry(coreTop, coreBot, absHeight, 8);
+    coreGeo.scale(1, 1, 0.65); 
+    addPart(coreGeo, 0, 2.7, -0.15, "Core", "Abdominal cavity.", "Abdomen");
+
+    // 2. Rectus Abdominis (The "Six Pack")
+    const rows = 3;
+    const startY = 3.55; // Just below sternum
+    const muscleH = absHeight / 3.4;
+    
+    for(let r=0; r<rows; r++) {
+        // Taper width slightly as we go down to waist
+        const rowTaper = 1.0 - (r * 0.12); 
+        const yPos = startY - (r * (muscleH + 0.05));
+        
+        // Z-offset follows the curve of the spine (upper is further out, lower is in)
+        const zPos = 0.42 - (r * 0.04); 
+
+        [-1, 1].forEach(side => {
+            const sideName = side === 1 ? "Left" : "Right";
+            const xPos = side * (isMale ? 0.30 : 0.22) * rowTaper;
+
+            let muscGeo;
+            
+            if (isMale) {
+                // Male: Boxy, sharp cuts, higher relief
+                const w = 0.55 * rowTaper;
+                const h = muscleH * 0.92;
+                const d = 0.22; // Deep definition
+                muscGeo = new THREE.BoxGeometry(w, h, d);
+                
+            } else {
+                // Female: "11-line abs" - smoother, flatter, vertical definition
+                const w = 0.45 * rowTaper;
+                const h = muscleH * 0.95;
+                const d = 0.15; // Softer definition
+                muscGeo = new THREE.SphereGeometry(1, 8, 8); 
+                muscGeo.scale(w * 0.5, h * 0.5, d); // Flattened oval
+            }
+
+            const absMesh = addPart(muscGeo, xPos, yPos, zPos, 
+                `${sideName} Abs (Row ${r+1})`, 
+                "Rectus Abdominis segment.", "Abdomen");
+            
+            // Rotations to conform to torso curve
+            absMesh.rotation.x = 0.1; // Tilt back 
+            absMesh.rotation.y = side * -0.05; // Slight wrap
+            absMesh.rotation.z = side * -0.02; // Fan
+        });
+    }
+
+    // 3. Obliques (Side framing)
+    // Tapered cylinders on the flanks to create the V-taper
+    const oblHeight = 1.9;
+    const oblGeo = new THREE.CylinderGeometry(0.35, 0.45, oblHeight, 6);
+    oblGeo.scale(1, 1, 0.6); // Flatten against side
+    
+    [-1, 1].forEach(side => {
+        const xPos = side * (waistWidth * 0.6);
+        const obl = addPart(oblGeo, xPos, 2.7, 0.05, 
+            `${side === 1 ? 'Left' : 'Right'} Oblique`, 
+            "External Oblique muscle.", "Abdomen");
+        obl.rotation.z = side * 0.15; // Flare out at hips
+        obl.rotation.y = side * 0.1;
+    });
+
+    // Pelvis - Distinct Shape
+    // Female pelvis is wider at bottom (hips)
+    const pelvisTop = waistWidth * 0.5;
+    const pelvisBot = hipWidth * 0.5;
+    const pelvisGeo = new THREE.CylinderGeometry(pelvisTop, pelvisBot, 1.5, 8);
+    pelvisGeo.scale(1, 1, 0.8);
+    addPart(pelvisGeo, 0, 1.1, 0, "Pelvis", "Hip bone structure.", "Torso");
+
+    // Gender Specifics
+    if (!isMale) {
+        // --- CUSTOM TEARDROP GEOMETRY GENERATOR ---
+        const bSize = 0.6 * breastScale;
+        const zOff = 0.55 + bSize * 0.2; 
+
+        // Function to mold a sphere into a teardrop
+        function createTeardrop(radius) {
+            // Start with a higher res sphere for smooth deformation
+            const geo = new THREE.SphereGeometry(radius, 16, 12);
+            const pos = geo.attributes.position;
+            const v = new THREE.Vector3();
+
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i);
+
+                // 1. Taper the top half (y > 0) to create the slope
+                if (v.y > 0) {
+                    // The higher the vertex, the more we pull x/z in
+                    const taperFactor = 1.0 - (v.y / radius) * 0.55; 
+                    v.x *= taperFactor;
+                    v.z *= taperFactor;
+                }
+
+                // 2. Flatten the back (z < 0) to sit against chest
+                // We assume local Z- is the back
+                if (v.z < 0) {
+                    v.z *= 0.6; 
+                }
+                
+                // 3. Slightly expand bottom (y < 0) for fullness (gravity)
+                if (v.y < 0) {
+                    const swellFactor = 1.0 + Math.abs(v.y / radius) * 0.1;
+                    v.z *= swellFactor;
+                }
+
+                pos.setXYZ(i, v.x, v.y, v.z);
+            }
+            
+            geo.computeVertexNormals(); // Fix lighting after deformation
+            
+            // Final squash to make it organic (not too pointy)
+            geo.scale(1.0, 1.1, 0.8); 
+            
+            return geo;
+        }
+
+        // Generate geometry
+        // We create two separate instances so they can be rotated independently if needed, 
+        // though we could clone.
+        const lGeo = createTeardrop(bSize);
+        const rGeo = createTeardrop(bSize);
+
+        // Positioning
+        // y: 4.5 is roughly mid-chest. 
+        // zOff: Depth offset.
+        const lBreast = addPart(lGeo, 0.55, 4.45, zOff, "Left Breast", "Mammary gland (Teardrop profile).", "Torso");
+        const rBreast = addPart(rGeo, -0.55, 4.45, zOff, "Right Breast", "Mammary gland (Teardrop profile).", "Torso");
+
+        // Orientation
+        // Rotate outward (Y) and slightly down (X) for natural hang
+        lBreast.rotation.y = -0.2; 
+        lBreast.rotation.x = 0.1; // Tilt bottom out/top in slightly if needed, or leave 0 depending on vertex logic.
+        // Actually, with the taper logic, Y+ is the top slope. We want Y+ pointing slightly back towards clavicle.
+        lBreast.rotation.x = -0.15; 
+
+        rBreast.rotation.y = 0.2;
+        rBreast.rotation.x = -0.15;
+
+    } else {
+        // Pectorals (Male)
+        addPart(new THREE.BoxGeometry(1.0, 0.8, 0.3), 0.6, 5.0, 0.6, "Right Pec", "Pectoralis Major.", "Torso");
+        addPart(new THREE.BoxGeometry(1.0, 0.8, 0.3), -0.6, 5.0, 0.6, "Left Pec", "Pectoralis Major.", "Torso");
+    }
+
+    // INTERNAL ORGANS (Stylized external representation for interaction)
+    addPart(new THREE.SphereGeometry(0.55), -0.5, 2.9, 0.3, "Stomach", "Digestion.", "Abdomen");
+    addPart(new THREE.BoxGeometry(1.0, 0.8, 0.6), 0.5, 3.0, 0.3, "Liver", "Detox.", "Abdomen");
+    addPart(new THREE.SphereGeometry(0.7), 0, 2.2, 0.4, "Intestines", "Absorption.", "Abdomen");
+
+    // 3. ARMS
+    const armLen = 2.8;
     [1, -1].forEach(s => {
         const side = s === 1 ? "Right" : "Left";
         const cat = s === 1 ? "Right Arm" : "Left Arm";
-        addPart(new THREE.SphereGeometry(0.7), s*shoulderWidth*0.8, 5, 0, `${side} Shoulder`, "Joint.", cat);
-        addPart(new THREE.CylinderGeometry(0.35, 0.3, 3), s*shoulderWidth*0.9, 3, 0, `${side} Arm`, "Humerus.", cat);
-        addPart(new THREE.BoxGeometry(0.5, 0.8, 0.2), s*shoulderWidth*1.15, -2.2, 0.6, `${side} Hand`, "Hand.", cat);
+        
+        // Shoulder (Deltoid) - Sphere to smooth joint
+        const deltSize = isMale ? 0.75 : 0.6;
+        addPart(new THREE.SphereGeometry(deltSize, 8, 8), s * (shoulderWidth/2 + 0.2), 5.6, 0, `${side} Deltoid`, "Shoulder muscle.", cat);
+
+        // Upper Arm (Humerus/Bicep) - Tapered cylinder
+        const uArmThick = isMale ? 0.45 : 0.35;
+        const uArmGeo = new THREE.CylinderGeometry(uArmThick, uArmThick*0.8, armLen, 6);
+        addPart(uArmGeo, s * (shoulderWidth/2 + 0.4), 3.8, 0, `${side} Arm`, "Humerus/Biceps.", cat);
+
+        // Elbow
+        addPart(new THREE.SphereGeometry(uArmThick*0.9), s * (shoulderWidth/2 + 0.5), 2.3, -0.1, `${side} Elbow`, "Joint.", cat);
+
+        // Forearm
+        const fArmGeo = new THREE.CylinderGeometry(uArmThick*0.9, uArmThick*0.6, armLen*0.9, 6);
+        addPart(fArmGeo, s * (shoulderWidth/2 + 0.6), 0.9, 0.2, `${side} Forearm`, "Radius/Ulna.", cat);
+
+        // Hand
+        addPart(new THREE.BoxGeometry(0.5, 0.7, 0.3), s * (shoulderWidth/2 + 0.65), -0.8, 0.3, `${side} Hand`, "Hand.", cat);
     });
 
+    // 4. LEGS
+    const legLen = 4.0;
+    // Females often have legs starting slightly wider due to pelvis width
+    const legSpace = hipWidth * 0.3; 
+    
     [1, -1].forEach(s => {
         const side = s === 1 ? "Right" : "Left";
-        const lx = s * hipWidth * 0.4;
         const cat = s === 1 ? "Right Leg" : "Left Leg";
-        addPart(new THREE.CylinderGeometry(0.5, 0.4, 4), lx, -2.5, 0, `${side} Thigh`, "Femur.", cat);
-        addPart(new THREE.CylinderGeometry(0.4, 0.3, 4), lx, -7, 0, `${side} Shin`, "Tibia.", cat);
-        addPart(new THREE.BoxGeometry(0.6, 0.5, 1.8), lx, -9.6, 0.6, `${side} Foot`, "Foot.", cat);
+        const lx = s * legSpace;
+        
+        // Hip Joint - smooths connection to pelvis
+        addPart(new THREE.SphereGeometry(0.65), lx, 0.5, 0, `${side} Hip`, "Hip Joint.", "Torso");
+
+        // Thigh (Femur/Quads) - Tapered (Thicker at top)
+        const thighTop = isMale ? 0.65 : 0.7; 
+        const thighBot = 0.5;
+        const thighGeo = new THREE.CylinderGeometry(thighTop, thighBot, legLen, 8);
+        addPart(thighGeo, lx, -1.8, 0, `${side} Thigh`, "Femur/Quadriceps.", cat);
+
+        // Knee
+        addPart(new THREE.SphereGeometry(0.52), lx, -4.0, 0.1, `${side} Knee`, "Patella.", cat);
+
+        // Calf (Tibia) - Tapered (Thicker at top for muscle)
+        const calfGeo = new THREE.CylinderGeometry(0.5, 0.35, legLen, 8);
+        addPart(calfGeo, lx, -6.2, 0, `${side} Calf`, "Tibia/Gastrocnemius.", cat);
+
+        // Ankle
+        addPart(new THREE.SphereGeometry(0.38), lx, -8.3, 0.1, `${side} Ankle`, "Joint.", cat);
+
+        // Foot
+        addPart(new THREE.BoxGeometry(0.6, 0.5, 1.7), lx, -8.7, 0.6, `${side} Foot`, "Foot.", cat);
     });
 
     scene.add(bodyGroup);
