@@ -180,7 +180,7 @@
 
         /* 2. EDIT TRACKER ID: Change this to something unique (e.g. 'alex-matrix-projects') 
            If you don't change this, you share the counter with everyone who uses this code! */
-        const trackerNamespace = 'change-this-to-your-name-v1'; 
+        const trackerNamespace = 'change-this-to-your-name-v2'; 
         const trackerKey = 'visits';
 
         /* --- LOGIC: GENERATE LIST --- */
@@ -201,14 +201,17 @@
         });
 
         /* --- LOGIC: VISITOR TRACKER --- */
-        // Uses CountAPI to fetch and increment hits
-        const countUrl = `https://api.countapi.xyz/hit/${trackerNamespace}/${trackerKey}`;
+        // Uses counterapi.dev (Replacement for countapi.xyz which is offline)
+        const countUrl = `https://api.counterapi.dev/v1/${trackerNamespace}/${trackerKey}/up`;
         
         // This runs automatically on page load
         fetch(countUrl)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error("API Error");
+                return res.json();
+            })
             .then(data => {
-                const count = data.value;
+                const count = data.count; // Note: 'count' property for new API
                 // Pad with zeros (e.g., 42 becomes 000042)
                 const formatted = count.toString().padStart(6, '0');
                 
@@ -217,7 +220,7 @@
                 countEl.innerHTML = `[ <span class="stat-number">${formatted}</span> ]`;
             })
             .catch(err => {
-                console.log("Tracker offline");
+                console.error("Tracker offline:", err);
                 document.getElementById('visitCount').innerText = "[ OFFLINE ]";
             });
 
