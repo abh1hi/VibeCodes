@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Construct</title>
+    <style>
+        /* --- CSS STYLES --- */
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden; /* Prevents scrollbars */
+            font-family: 'VT323', monospace;
+            color: #0F0;
+        }
+
+        /* The Canvas (Rain Background) */
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        /* The Content Container (Terminal Window) */
+        .container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            
+            width: 80%;
+            max-width: 600px;
+            background: rgba(0, 10, 0, 0.9); /* Dark semi-transparent bg */
+            border: 1px solid #0F0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+            padding: 2rem;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 10px #0F0;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+        }
+
+        p.subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.8;
+            border-bottom: 1px solid #0F0;
+            display: inline-block;
+            padding-bottom: 5px;
+        }
+
+        /* Project List Styling */
+        .project-list {
+            list-style: none;
+            padding: 0;
+            max-height: 50vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #0F0 #000;
+        }
+
+        /* Scrollbar customization for Webkit */
+        .project-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .project-list::-webkit-scrollbar-thumb {
+            background-color: #0F0;
+        }
+
+        .project-item {
+            margin: 10px 0;
+        }
+
+        .project-link {
+            display: block;
+            text-decoration: none;
+            color: #0F0;
+            font-size: 1.5rem;
+            padding: 10px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        /* Hover Effects */
+        .project-link:hover {
+            background-color: rgba(0, 255, 0, 0.1);
+            border: 1px solid #0F0;
+            text-shadow: 2px 2px 0px rgba(255, 0, 0, 0.7); /* Glitch shadow */
+            letter-spacing: 2px;
+        }
+
+        .project-link::before {
+            content: "> ";
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .project-link:hover::before {
+            opacity: 1;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="matrixCanvas"></canvas>
+
+    <div class="container">
+        <h1>System Core</h1>
+        <p class="subtitle">Select a construct to load...</p>
+        
+        <ul class="project-list" id="projectList">
+            </ul>
+    </div>
+
+    <script>
+        /* --- CONFIGURATION SECTION --- */
+        /* List your file names here exactly as they are saved in your folder */
+        const myProjects = [
+            { name: "Three.js Cube", file: "cube.html" },
+            { name: "Retro Calculator", file: "calc.html" },
+            { name: "Portfolio v1", file: "portfolio.html" },
+            { name: "Glitch Art", file: "glitch.html" },
+            { name: "CSS Animation", file: "animation.html" }
+        ];
+
+        /* --- LOGIC: GENERATE LIST --- */
+        const listContainer = document.getElementById('projectList');
+
+        myProjects.forEach(project => {
+            const li = document.createElement('li');
+            li.className = 'project-item';
+            
+            const a = document.createElement('a');
+            a.className = 'project-link';
+            a.href = `./${project.file}`; // Links to file in same directory
+            a.innerText = project.name;
+            a.target = "_blank"; // Opens in new tab (optional, remove if unwanted)
+            
+            li.appendChild(a);
+            listContainer.appendChild(li);
+        });
+
+        /* --- LOGIC: MATRIX RAIN EFFECT --- */
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas to full screen
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Characters to use (Katakana + Latin + Numerals)
+        const katakana = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン';
+        const latin = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const nums = '0123456789';
+        const alphabet = katakana + latin + nums;
+
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+
+        const drops = []; // Array of drops - one per column
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1; 
+        }
+
+        function draw() {
+            // Black BG for the canvas
+            // translucent BG to show trail
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0F0'; // Green text
+            ctx.font = fontSize + 'px monospace';
+
+            // Loop over drops
+            for (let i = 0; i < drops.length; i++) {
+                // Random char
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                
+                // x = i * fontSize, y = value of drops[i] * fontSize
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                // Sending the drop back to the top randomly after it has crossed the screen
+                // Adding randomness to the reset to make the drops scattered on the Y axis
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+
+                // Increment y coordinate
+                drops[i]++;
+            }
+        }
+
+        setInterval(draw, 30);
+
+    </script>
+</body>
+</html>
